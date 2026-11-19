@@ -1,289 +1,286 @@
-# Proxy Generator - Full-Stack Take-Home Test
+# Byteful Proxy Generator
 
-> [!WARNING]
-> This repo holds two take-home tests, each on its own branch: `backend` and
-> `full-stack`. Before you start, ask your contact at Byteful which test to do.
+A Next.js app that builds residential proxy lists for Byteful's gateway. Pick a
+proxy user, session type, protocol and quantity, optionally target a country,
+city and ISP/ASN, and get ready-to-use proxy strings to copy or download.
 
-## Background
+- **`POST /api/residential/list`** builds the list in-process, mirroring Byteful's
+  [Create Residential List](https://documentation.byteful.com/api-reference/residential/create-residential-list).
+- **Lookup routes** proxy country, city and ASN search (and live node counts) from
+  the Byteful API, with caching, retries and rate limiting. The API key never leaves the server.
+- **The generator page** validates with the same Zod schema as the server, shows a
+  live preview of the proxy username and the size of the matching IP pool, and supports
+  presets, copy, `.txt` download, dark mode and keyboard submit (⌘/Ctrl + Enter).
 
-**Byteful** sells residential proxies. A customer connects to our residential
-gateway with a username and a password. The username carries the targeting
-options, for example the country and the city. Our routing service reads these
-options and sends the request through a matching residential IP.
-
-Customers do not write these usernames by hand. They use a **proxy generator**.
-They pick the options in a form, and the generator returns a list of ready
-proxy strings.
-
-In this take-home test, you build your own version of that generator. You
-build the frontend page and the backend endpoint behind it. You use the real
-Byteful API for the location data.
+Stack: Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS 4, Zod 4,
+TanStack Query 5, Headless UI, Motion + Flubber (morphing icons), OpenTelemetry
+(`@vercel/otel`), Vitest.
 
 ---
 
-## Overview
+## Run it
 
-Build a Next.js application with these parts:
+Needs Node.js 20 or later.
 
-1. **A generator endpoint** - a server route that returns a list of proxy
-   strings. It copies the behavior of our
-   [Create Residential List](https://documentation.byteful.com/api-reference/residential/create-residential-list)
-   endpoint.
-2. **Lookup endpoints** - server routes that get countries, cities and ASNs
-   from the Byteful API.
-3. **A generator page** - a UI where a user picks the options, generates a
-   list, and copies or downloads it.
-
----
-
-## Setup
-
-1. Create an account at [dashboard.byteful.com](https://dashboard.byteful.com).
-2. Create an API key at
-   [dashboard.byteful.com/developer/api-key](https://dashboard.byteful.com/developer/api-key).
-   You get a public key and a private key.
-3. Read the [API introduction](https://documentation.byteful.com/api-introduction).
-   It explains the authentication headers and the rate limits.
-
-### Keep the API key secret
-
-The API key gives access to your Byteful account.
-
-- Use the key only in server code.
-- Never put the key in a `NEXT_PUBLIC_*` variable or in any code that runs in
-  the browser.
-- Never commit the key. Put it in `.env.local` and add an `.env.example` file
-  without values.
-
-We check this. A key that the browser can see fails the test.
-
----
-
-## The Byteful API
-
-All requests go to `https://api.byteful.com/1.0/`. Every request needs these
-two headers:
-
-```
-X-API-Public-Key: <your public key>
-X-API-Private-Key: <your private key>
+```bash
+npm install
+cp .env.example .env.local   # then fill in your two Byteful keys
+npm run dev                  # http://localhost:3000
 ```
 
-Use these endpoints for the lookups:
+| Script | What it does |
+|---|---|
+| `npm run dev` | Dev server on port 3000 |
+| `npm run build && npm start` | Production build and server |
+| `npm test` | Unit and route tests (Vitest), no network needed |
+| `npm run typecheck` / `npm run lint` | TypeScript and ESLint |
 
-| Data | Endpoint | Docs |
+### Environment variables
+
+| Name | Required | Description |
 |---|---|---|
-| Countries | `GET /public/user/country/search` | [Search Country](https://documentation.byteful.com/api-reference/country/search-country) |
-| Cities | `GET /public/user/city/search` | [Search City](https://documentation.byteful.com/api-reference/city/search-city) |
-| ASNs | `GET /public/user/asn/search` | [Search ASN](https://documentation.byteful.com/api-reference/asn/search-asn) |
+| `BYTEFUL_PUBLIC_KEY` | yes | Public key from [dashboard.byteful.com/developer/api-key](https://dashboard.byteful.com/developer/api-key) |
+| `BYTEFUL_PRIVATE_KEY` | yes | Private key from the same page |
+| `BYTEFUL_API_URL` | no | Defaults to `https://api.byteful.com/1.0` |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | no | Send traces over OTLP/HTTP, for example `http://localhost:4318` |
 
-The API allows 20 requests per second for each customer by default. Above
-that limit, it returns `429`.
+The keys are read on the first request, not at build time, so `npm run build` works
+without them. A missing key returns a `configuration_error` that names it.
 
-The city search has no `country_id` filter. To find the cities in a country,
-filter on `subdivision_id` with the country code and a `%` wildcard. For
-example, `subdivision_id=gb%` returns the cities in the United Kingdom. Encode the
-`%` as `%25` in the URL. The API introduction explains the operators.
+### Traces (optional)
+
+```bash
+docker compose up -d                                          # Jaeger
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 npm run dev
+open http://localhost:16686                                   # service: byteful-proxy-generator
+```
+
+Every response carries an `x-request-id` header (and `request_id` in error bodies).
+It is the OpenTelemetry trace ID, so a user's error report leads straight to its trace.
 
 ---
 
-## API Specification
+## API
 
-### POST /api/residential/list
+### `POST /api/residential/list`
 
-Generate a list of residential proxy strings. Do not call the Byteful
-residential list endpoint. Build the list in your own code.
-
-**Request body:** a JSON object with these fields.
-
-| Name | Type | Required | Default | Rules |
-|---|---|---|---|---|
-| `proxy_user_id` | string | yes | - | Any non-empty string. You do not need to check that the user exists. |
-| `proxy_user_password` | string | yes | - | Any non-empty string. You do not need to check it. |
-| `list_count` | integer | no | `100` | From 1 to 1000. |
-| `list_format` | string | no | `http` | `http`, `https`, `socks5` or `socks5h`. |
-| `list_session_type` | string | no | `sticky` | `sticky` or `rotating`. |
-| `country_id` | string | no | - | Lowercase ISO 3166-1 alpha-2 code, for example `us`. |
-| `city_alias` | string | no | - | The `city_alias` from the city search. Requires `country_id`. |
-| `asn_id` | integer | no | - | The `asn_id` from the ASN search. |
-
-A request can send `country_id`, `city_alias` and `asn_id` together.
-
-**Success response (200):**
+```bash
+curl -X POST http://localhost:3000/api/residential/list \
+  -d '{"proxy_user_id":"alice","proxy_user_password":"secretpass","list_count":2,"country_id":"gb","city_alias":"norwich"}'
+```
 
 ```json
 {
   "data": [
-    "http://alice_c_gb_city_norwich_s_DDINPY7TQ0781XEO:secretpass@residential.byteful.com:8000",
-    "http://alice_c_gb_city_norwich_s_XIINPY7TQ0781XEA:secretpass@residential.byteful.com:8000"
+    "http://alice_c_gb_city_norwich_s_AD3EAXSD1WPYG0OG:secretpass@residential.byteful.com:8000",
+    "http://alice_c_gb_city_norwich_s_7DYN9VSDWKIY7FGX:secretpass@residential.byteful.com:8000"
   ],
   "message": "Residential list successfully generated."
 }
 ```
 
-**Error response (400):**
+| Field | Type | Required | Default | Rules |
+|---|---|---|---|---|
+| `proxy_user_id` | string | yes | | Not blank, at most 128 characters |
+| `proxy_user_password` | string | yes | | Not blank, at most 256 characters |
+| `list_count` | integer | no | `100` | 1 to 1000 |
+| `list_format` | string | no | `http` | `http`, `https`, `socks5`, `socks5h` |
+| `list_session_type` | string | no | `sticky` | `sticky` or `rotating` |
+| `country_id` | string | no | | ISO 3166-1 alpha-2, must be a country Byteful serves |
+| `city_alias` | string | no | | `city_alias` from the city search; needs `country_id`; must be in that country |
+| `asn_id` | integer | no | | Must exist; if `country_id` is set, the ASN must be registered in that country |
+
+Sticky lists get a unique 16-character session ID per line (crypto RNG, no modulo
+bias, uniqueness guaranteed with a `Set`). Rotating lists return `list_count`
+identical lines.
+
+### Lookup routes
+
+| Route | Returns |
+|---|---|
+| `GET /api/locations/countries` | All countries with `node_count`, busiest first |
+| `GET /api/locations/cities?country_id=gb&q=lon&limit=50` | Cities in one country, busiest first, plus `total_count` |
+| `GET /api/locations/asns?country_id=gb&q=virgin` | ASNs (by name, or `q=AS5089` by number); `country_id` optional |
+| `GET /api/residential/availability?country_id=gb&city_alias=manchester&asn_id=5089` | `{ "data": { "node_count": 1721 } }`, online nodes for that targeting |
+
+Field names match the generator request (`country_id`, `city_alias`, `asn_id`), so a
+lookup result can be sent straight back to the generator.
+
+### Errors
+
+Every error from every route has one shape:
 
 ```json
 {
   "error": "invalid_parameter",
-  "message": "list_count must be from 1 to 1000"
+  "message": "list_count must be a whole number from 1 to 1000",
+  "field": "list_count",
+  "request_id": "5b8f2f4bf765b0ffb4e1c630c2a4e902"
 }
 ```
 
-You can choose your own error values. Keep the same body shape for every
-error, and list your errors in your README.
+`field` is present when the error is about one input. `request_id` is the trace ID.
 
-### Proxy string format
+| Status | `error` | When |
+|---|---|---|
+| 400 | `invalid_json` | The body is not valid JSON, or not a JSON object |
+| 400 | `missing_parameter` | `proxy_user_id` or `proxy_user_password` is absent |
+| 400 | `invalid_parameter` | Wrong type, out of range, unknown value, unknown field, or `city_alias` without `country_id`. Also bad lookup query params |
+| 405 | `method_not_allowed` | Any method other than `POST` on `/api/residential/list` |
+| 413 | `payload_too_large` | Body over 16 KB |
+| 422 | `unknown_location` | The country, city or ASN does not exist in Byteful's data, or the ASN is in a different country |
+| 429 | `rate_limited` | Byteful kept answering 429 after our retries. Sends `Retry-After` |
+| 500 | `configuration_error` | A `BYTEFUL_*` variable is missing |
+| 500 | `internal_error` | An unexpected bug. Quote the `request_id` |
+| 502 | `upstream_auth_failed` | Byteful rejected the API key |
+| 502 | `upstream_error` | Byteful returned an error, could not be reached, or sent data in an unexpected shape |
+| 504 | `upstream_timeout` | Byteful did not answer within 8 seconds |
 
-Each proxy string has this format:
-
-```
-<list_format>://<username>:<proxy_user_password>@residential.byteful.com:8000
-```
-
-Use port `8000` for every format.
-
-The username has this format. The parts in square brackets are optional.
-
-```
-<proxy_user_id>[_c_<country_id>[_city_<city_alias>]][_asn_<asn_id>][_s_<session_id>]
-```
-
-- Add `_s_<session_id>` only when `list_session_type` is `sticky`.
-- `session_id` is 16 random uppercase letters and digits, for example
-  `DDINPY7TQ0781XEO`.
-- In a `sticky` list, every proxy string must have a unique session ID.
-- A `rotating` list has no session ID, so all its strings are the same.
-
-### Lookup routes
-
-Add server routes that the page uses to get countries, cities and ASNs. You
-choose their paths and shapes. The page must never call
-`api.byteful.com` directly, because that needs the API key.
+The browser client adds one more code of its own, `network_error`, for requests that
+never get a response.
 
 ---
 
-## The Generator Page
+## How it is built
 
-Build one page with these parts:
+```
+src/
+├── app/                      Routes and the page shell (thin: parse → call → respond)
+│   ├── api/residential/…     list (POST), availability (GET)
+│   └── api/locations/…       countries, cities, asns (GET)
+├── lib/                      Shared by browser and server, no I/O
+│   ├── proxy/targeting.ts    Targeting registry + username builder
+│   ├── proxy/schema.ts       Zod request schema (used by the route AND the form)
+│   ├── proxy/generate.ts     Session IDs and list generation
+│   └── api/                  Error codes + ApiError, response contracts
+├── server/                   Server only (`import "server-only"`)
+│   ├── byteful/client.ts     Byteful HTTP client: auth, timeout, retry, rate limit, Zod
+│   ├── byteful/locations.ts  Country/city/ASN/availability lookups, cached
+│   ├── residential.ts        Business rules: check targeting, then generate
+│   ├── http.ts               Route wrapper: errors → JSON, request IDs, input parsing
+│   └── cache.ts, rate-limiter.ts, telemetry.ts, log.ts, env.ts
+├── client/                   Browser data layer: API client, React Query hooks, presets
+└── components/               UI: generator sections, combobox, morphing icons
+```
 
-1. **Credentials** - fields for the proxy user ID and the password.
-2. **Options** - the list count, the format and the session type.
-3. **Targeting** - fields for the country, the city and the ASN. All three are
-   optional.
-   - The city field stays disabled until the user picks a country.
-   - Show only the cities in the selected country.
-   - The user can pick an ASN with or without a country. When the user picks
-     a country, show only the ASNs in that country.
-   - The city list is very large. The user must be able to search it.
-4. **Result** - the generated list, with a button to copy all lines and a
-   button to download them as a `.txt` file.
-5. **States** - show a clear message for loading, for an empty result, and
-   for every error.
+A request flows **route → business logic (`server/residential.ts`) → Byteful client**,
+and the UI flows **component → React Query hook → `client/api.ts` → our route**. The
+UI never calls `api.byteful.com`.
 
-You choose the layout and the styling. A plain page that works well scores
-higher than a nice page that breaks.
+### Adding a targeting option (for example a US state or a zip code)
 
-### Our generator
-
-This screenshot shows the generator in the Byteful dashboard. Use it to
-understand what the product does and what our customers expect.
-
-![The residential proxy generator in the Byteful dashboard](docs/byteful-generator.webp)
-
-### Branding and design
-
-- You can give your page the Byteful brand. This is optional.
-- You can use our brand assets, for example the logo, the colors and the
-  fonts. You can also use parts of our design system.
-- Do not copy the generator UI in the screenshot exactly. Design your own
-  page. We want to see how you think about the product.
-
----
-
-## Evaluation Criteria
-
-### Areas of Focus
-
-- **Product thinking** - The page stops the user from making a request that
-  the backend rejects. Messages tell the user what to do next.
-- **Code structure** - The UI, the API client, the business logic and the
-  server routes are separate.
-- **Error handling** - Errors from the Byteful API, from validation and from
-  the network are easy to debug and clear to the user.
-- **Security** - The API key stays on the server.
-- **Performance** - The search fields do not send a request on every key
-  press. The app does not get the same lookup data many times.
-
-### How We Score
-
-We score your solution in three tiers. You must meet a tier before the next
-tier counts.
-
-1. **Working** - The app starts with the instructions in your README. The
-   endpoint meets the spec. The page generates a list with each targeting
-   option. The API key is not visible in the browser.
-2. **Clean and extensible** - The code is separate as described above. Errors
-   are consistent. It is easy to add a new targeting option, such as a zip
-   code or a US state.
-3. **Ready for future changes** - Your design can support features that this
-   spec does not ask for, for example saved presets, or a node count next to
-   each location. You can build these features or describe them in your
-   README or in TODO comments. We value clear reasons and trade-offs more
-   than the number of features.
-
-### Trade-Offs
-
-You can cut corners to keep the scope small. If you do, leave a comment that
-explains what you would do with more time. For example:
+Targeting lives in one registry, `src/lib/proxy/targeting.ts`:
 
 ```ts
-// TODO cache the country list.
-// Currently the server gets it from the Byteful API on every page load.
-// The list changes rarely, so I would cache it for one hour with
-// Next.js revalidation.
+state: { tag: "st", label: "State", requires: "country_id", schema: z.string().regex(/^[a-z]{2}-[a-z0-9]+$/) },
 ```
 
-### Questions
+That single entry adds the field to the request schema, the `requires` check, the
+username builder (in registry order), the field labels and the error messages. The
+compiler then points at what is left: a colour and caption in the username preview.
+After that, add a lookup in `server/byteful/locations.ts`, a check in
+`resolveTargeting`, a form value in `use-generator-form.ts` and a combobox in
+`targeting-section.tsx`. The combobox, caching and error handling are already generic.
 
-If something in this spec is not clear, ask us. We welcome questions. We also
-expect you to make reasonable assumptions on implementation details.
+### Decisions and trade-offs
+
+**One schema for client and server.** The form runs `residentialListRequestSchema` on
+every change, so the page cannot send a request the endpoint would reject. Messages
+are short predicates ("must be a whole number from 1 to 1000"). The API prefixes the
+field name (`list_count …`) and the form prefixes the label (`Quantity …`).
+
+**Targeting is checked against real data.** A typo like `city_alias: "londn"` returns
+`422 unknown_location` instead of a list of dead proxies. A UK country with a US ASN
+is rejected too: I checked, and the availability API reports 0 nodes for that
+combination. The lookups are cached, so the check normally costs nothing.
+*Trade-off:* generation now needs the Byteful API to be up when targeting is used.
+If uptime mattered more than catching bad targeting, `resolveTargeting` could
+fail open with a warning instead.
+
+**Caching at three levels.** (1) The server has an in-memory TTL cache that also merges
+concurrent identical calls into one request. Countries and lookups are kept 15–60
+minutes; availability for 60 seconds, since node counts move. Failures are never
+cached. (2) Lookup routes send `Cache-Control` so the browser and a CDN can reuse
+them. (3) React Query keeps results per query key, and city and ASN searches are
+debounced by 250 ms. The full country list (250 rows) is sent once and filtered
+in the browser.
+*Why not Next's `'use cache'`:* errors thrown inside it pass through React's
+serializer, and production builds hide their messages, so typed upstream errors would
+be lost. *Limit:* the cache is per instance. On serverless or several instances it
+would move to Redis.
+
+**Staying under Byteful's 20 req/s.** All upstream calls share a rolling-window limiter
+(18/s), and 429/5xx/network failures retry with backoff, honouring `Retry-After`.
+Timeouts are not retried, because the user has already waited 8 s.
+
+**Resilient parsing.** Byteful responses are checked with Zod row by row. A malformed
+row is logged and skipped rather than failing the whole lookup.
+
+**Security.** Keys are read only in `server/env.ts`, which imports `server-only`, so
+a client import fails the build. There is no `NEXT_PUBLIC_` variable. I checked that
+neither key appears in `.next/static`, the served HTML or exported spans. Generated
+lists are `Cache-Control: no-store`. Presets never store the password. Credentials are
+percent-encoded in the URL, so a password with `@` or `:` still parses, and plain
+values come out unchanged.
+
+**Observability.** `@vercel/otel` traces each request. Custom spans cover
+`residential.create_list` (count, format, session type, targeting; never
+credentials), `locations.*` (with `cache.hit`) and `byteful GET <path>` (status code,
+Byteful's `api_request_id`, retry events). Errors set `error.type` on the request
+span. Logs are JSON lines carrying the same `trace_id`.
+
+### Product details
+
+- **Live username preview.** It shows each part of the username (`c_gb`, `city_…`,
+  `asn_…`, `s_…`) colour-coded with its meaning, built by the same function the
+  server uses.
+- **Matching pool meter.** It shows online IPs for the current targeting. It warns
+  when nothing is online ("remove the city or ASN to widen the pool"), and when a
+  sticky list asks for more sessions than there are online IPs.
+- **Each location shows its online node count**, and lists are sorted busiest first.
+  Offline locations are labelled.
+- **Changing the country** clears a city outside it, and an ASN registered elsewhere
+  (with a note saying so). The city field stays disabled until a country is picked.
+- **Errors say what to do next**, appear on the field they are about, and include a
+  reference ID. A "settings changed" banner appears when the list on screen no longer
+  matches the form.
+- **Presets** in `localStorage`, versioned and Zod-checked on read, and synced
+  across tabs.
+- **Results:** click any line to copy it, copy all, download as
+  `byteful-gb-london-sticky-http-100.txt`, hide passwords for screen sharing, and a
+  ready `curl` command that tests the first proxy against ipinfo.io.
+- **Motion with Flubber.** The generate icon morphs bolt → spinner → check/cross;
+  copy and download morph to a check; the theme toggle morphs sun ↔ moon. Animations
+  respect "reduce motion".
 
 ---
 
-## Use of AI
+## Assumptions
 
-We are an AI first company. We love AI. We spend thousands a month on our
-staff to use Claude and agents but we HATE slop.
+- `country_id` and `city_alias` are trimmed and lower-cased, so `"GB"` works.
+- `null` for an optional field means "not set".
+- Unknown body fields are rejected (`invalid_parameter`) rather than silently ignored.
+  A typo like `contry_id` would otherwise produce untargeted proxies.
+- `asn_id` must be a JSON number; `"5089"` is rejected.
+- The body is parsed as JSON whatever the `Content-Type`, so `curl -d` works without
+  extra headers.
+- Length limits on credentials (128 and 256) are sanity limits; the spec does not set any.
+- The spec suggests `subdivision_id=gb%`, but that returns no cities. The API needs the
+  `like_` operator: `like_subdivision_id=gb-%`. Every subdivision ID has the form
+  `gb-xxx`, so the dash keeps the match exact. I checked all 9,547 cities.
+- The availability endpoint filters by city *name*, not alias, so the server resolves
+  the alias first.
 
-You can use AI tools for this test. If you use AI, you must still be able to
-explain every line of your code as if you wrote it yourself. We will check
-this in any follow-up conversation.
+## With more time
 
----
-
-## Timing
-
-We do not expect you to spend more than **3 hours** on this task. A working
-solution that covers the core requirements is more valuable than a polished
-but incomplete one.
-
-Come to any follow-up conversation with ideas about how you would improve or
-extend your solution.
-
----
-
-## Deliverables
-
-Submit your solution as a GitHub repository. It can be public or private.
-
-Include a README with:
-
-- Instructions to run the app, including the environment variables
-- Any assumptions you made
-- The error values that your endpoint returns
-
-Also:
-
-- Record a short video showing us round what you've made. Explain your
-  development process and why you've built things the way you have.
+- Per-IP rate limiting on the lookup routes. Today anyone who can reach the app can
+  spend the shared Byteful quota (the cache and limiter soften this).
+- A shared cache (Redis or `'use cache: remote'`) for multi-instance deployments.
+- Server-side presets per user and team, reusing the same Zod schema.
+- US state and zip targeting, OS targeting and session TTL, through the registry.
+- Server-render the country list into the page with React Query hydration, saving
+  one round trip.
+- Playwright end-to-end tests for the full page flow (the logic, the routes and the
+  Byteful client are covered by Vitest).
+- Virtualise the result list if lists grow beyond 1,000 lines. Today
+  `content-visibility` handles it.

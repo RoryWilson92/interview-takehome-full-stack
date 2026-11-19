@@ -1,0 +1,97 @@
+@import "tailwindcss";
+
+/* Dark mode follows a `.dark` class on <html>, set before paint by the script in layout.tsx. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --bg: #f6f6fb;
+  --surface: #ffffff;
+  --surface-muted: #f2f1f8;
+  --border: #e5e4ef;
+  --border-strong: #d2d0e0;
+  --fg: #15141f;
+  --fg-muted: #5b596d;
+  --fg-subtle: #8b899c;
+  --brand-soft: #efedfe;
+  --glow: rgba(99, 84, 235, 0.16);
+  color-scheme: light;
+}
+
+.dark {
+  --bg: #0b0a12;
+  --surface: #13121c;
+  --surface-muted: #1a1925;
+  --border: #252333;
+  --border-strong: #353246;
+  --fg: #eeedf5;
+  --fg-muted: #a6a4b8;
+  --fg-subtle: #737189;
+  --brand-soft: #211d45;
+  --glow: rgba(99, 84, 235, 0.28);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-space-grotesk), var(--font-inter), sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-brand-soft: var(--brand-soft);
+}
+
+/* Byteful purple, built around #6354eb. */
+@theme {
+  --color-brand-50: #f2f1fe;
+  --color-brand-100: #e5e2fd;
+  --color-brand-200: #cdc7fb;
+  --color-brand-300: #aba1f7;
+  --color-brand-400: #8a7cf2;
+  --color-brand-500: #6354eb;
+  --color-brand-600: #5243d6;
+  --color-brand-700: #4336b3;
+  --color-brand-800: #372d8f;
+  --color-brand-900: #2d2770;
+
+  --animate-shimmer: shimmer 1.6s linear infinite;
+  @keyframes shimmer {
+    from { background-position: 200% 0; }
+    to { background-position: -200% 0; }
+  }
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+/* Soft brand glow behind the header, using the gradient from byteful.com. */
+.page-glow {
+  background:
+    radial-gradient(40rem 18rem at 15% -4rem, rgba(217, 147, 247, 0.22), transparent 70%),
+    radial-gradient(42rem 20rem at 55% -6rem, var(--glow), transparent 70%),
+    radial-gradient(36rem 16rem at 92% -4rem, rgba(129, 212, 230, 0.2), transparent 70%);
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--surface-muted) 25%, var(--border) 50%, var(--surface-muted) 75%);
+  background-size: 200% 100%;
+  animation: var(--animate-shimmer);
+}
+
+/* Long result lists: let the browser skip layout for lines that are off screen. */
+.proxy-line {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 28px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+}

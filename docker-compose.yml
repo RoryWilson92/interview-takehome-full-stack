@@ -1,0 +1,10 @@
+# Optional local trace viewer.
+#   docker compose up -d
+#   OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 npm run dev
+#   open http://localhost:16686 and pick the "byteful-proxy-generator" service
+services:
+  jaeger:
+    image: jaegertracing/jaeger:2.22.0
+    ports:
+      - "16686:16686" # UI
+      - "4318:4318" # OTLP over HTTP

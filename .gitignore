@@ -1,0 +1,27 @@
+# dependencies
+/node_modules
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+/build
+next-env.d.ts
+*.tsbuildinfo
+
+# misc
+.DS_Store
+*.pem
+npm-debug.log*
+
+# env files: secrets live in .env.local, the template is committed
+.env*
+!.env.example
+
+# vercel
+.vercel
+
+# local tooling
+.claude/
