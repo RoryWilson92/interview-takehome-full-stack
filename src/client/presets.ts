@@ -71,12 +71,20 @@ function subscribe(notify: () => void) {
   };
 }
 
+/**
+ * Saves (or replaces by name) a preset. The values go through the schema, which keeps
+ * only the option and targeting fields, so passing the whole form never stores credentials.
+ */
+export function savePreset(name: string, values: PresetValues) {
+  const preset = { id: crypto.randomUUID(), name, values: presetValuesSchema.parse(values) };
+  write([...read().filter((existing) => existing.name !== name), preset]);
+}
+
+export function removePreset(id: string) {
+  write(read().filter((preset) => preset.id !== id));
+}
+
 export function usePresets() {
   const presets = useSyncExternalStore(subscribe, read, () => EMPTY);
-  return {
-    presets,
-    save: (name: string, values: PresetValues) =>
-      write([...read().filter((preset) => preset.name !== name), { id: crypto.randomUUID(), name, values }]),
-    remove: (id: string) => write(read().filter((preset) => preset.id !== id)),
-  };
+  return { presets, save: savePreset, remove: removePreset };
 }

@@ -73,6 +73,6 @@ export function usernameParts(proxyUserId: string, targeting: Targeting, session
 }
 
 export function buildUsername(proxyUserId: string, targeting: Targeting, sessionId?: string): string {
-	const parts = usernameParts(proxyUserId, targeting, sessionId);
+  const parts = usernameParts(proxyUserId, targeting, sessionId);
   return parts.map((part) => (part.kind === "user" ? part.value : `${part.tag}_${part.value}`)).join("_");
 }
