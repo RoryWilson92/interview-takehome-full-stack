@@ -167,7 +167,7 @@ const ProxyLine = memo(function ProxyLine({
   const sessionAt = user.lastIndexOf("_s_");
 
   return (
-    <li className="proxy-line">
+    <li>
       <button
         type="button"
         onClick={() => onCopy(index, line)}

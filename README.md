@@ -282,5 +282,7 @@ span. Logs are JSON lines carrying the same `trace_id`.
   one round trip.
 - Playwright end-to-end tests for the full page flow (the logic, the routes and the
   Byteful client are covered by Vitest).
-- Virtualise the result list if lists grow beyond 1,000 lines. Today
-  `content-visibility` handles it.
+- Virtualise the result list if lists grow well beyond 1,000 lines. At 1,000, a full
+  relayout takes about 7 ms, so it isn't needed yet. (`content-visibility: auto` was
+  tried and removed: its paint containment clipped long lines and broke horizontal
+  scrolling.)

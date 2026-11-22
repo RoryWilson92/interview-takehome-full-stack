@@ -98,12 +98,6 @@ body {
   animation: var(--animate-shimmer);
 }
 
-/* Long result lists: let the browser skip layout for lines that are off screen. */
-.proxy-line {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 28px;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .skeleton { animation: none; }
 }
