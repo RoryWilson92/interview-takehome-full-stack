@@ -13,6 +13,7 @@ import { LIST_FORMATS, SESSION_TYPES } from "@/lib/proxy/schema";
  */
 
 const STORAGE_KEY = "byteful.generator.presets";
+const PRESET_VERSION = 1;
 
 export const presetValuesSchema = z.object({
   list_count: z.string(),
@@ -24,7 +25,7 @@ export const presetValuesSchema = z.object({
 });
 
 const presetSchema = z.object({ id: z.string(), name: z.string(), values: presetValuesSchema });
-const storeSchema = z.object({ version: z.literal(1), presets: z.array(presetSchema) });
+const storeSchema = z.object({ version: z.literal(PRESET_VERSION), presets: z.array(presetSchema) });
 
 export type PresetValues = z.infer<typeof presetValuesSchema>;
 export type Preset = z.infer<typeof presetSchema>;
@@ -54,7 +55,7 @@ function read(): Preset[] {
 
 function write(presets: Preset[]) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, presets } satisfies z.infer<typeof storeSchema>));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: PRESET_VERSION, presets } satisfies z.infer<typeof storeSchema>));
   } catch {
     return;
   }

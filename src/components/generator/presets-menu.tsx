@@ -73,7 +73,7 @@ export function PresetsMenu({ form }: { form: GeneratorForm }) {
                 onKeyDown={(event) => {
                   if (event.key === "Enter" && name.trim()) {
                     event.preventDefault();
-                    save(name.trim(), form.presetValues());
+                    save(name.trim(), form.values);
                     setName("");
                   }
                 }}
@@ -86,7 +86,7 @@ export function PresetsMenu({ form }: { form: GeneratorForm }) {
                 type="button"
                 disabled={!name.trim()}
                 onClick={() => {
-                  save(name.trim(), form.presetValues());
+                  save(name.trim(), form.values);
                   setName("");
                 }}
                 className="h-8 rounded-lg bg-brand-500 px-3 text-xs font-semibold text-white disabled:opacity-40"
