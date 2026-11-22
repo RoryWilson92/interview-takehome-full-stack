@@ -1,4 +1,4 @@
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+import { sleep } from "@/lib/utils";
 
 /**
  * Lets at most `limit` calls start in any rolling `windowMs`. Extra callers

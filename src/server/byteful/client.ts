@@ -1,6 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { ApiError } from "@/lib/api/errors";
+import { sleep } from "@/lib/utils";
 import { serverEnv } from "../env";
 import { log } from "../log";
 import { createRateLimiter } from "../rate-limiter";
@@ -14,9 +15,10 @@ const PER_PAGE = 100; // the documented maximum
 // Stay a little under it so a burst of lookups never turns into 429s.
 const acquireSlot = createRateLimiter(18, 1_000);
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+// Rory - Backoff adds jitter to the backoff time to avoid thundering herd problem.
 const backoff = (attempt: number) => 250 * 2 ** attempt + Math.random() * 100;
 
+// Byteful API error format.
 const upstreamErrorSchema = z.object({
   error: z.string().optional(),
   message: z.string().optional(),
