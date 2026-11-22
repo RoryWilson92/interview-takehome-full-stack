@@ -72,10 +72,7 @@ export function usernameParts(proxyUserId: string, targeting: Targeting, session
   return parts;
 }
 
-export function joinUsername(parts: UsernamePart[]): string {
-  return parts.map((part) => (part.kind === "user" ? part.value : `${part.tag}_${part.value}`)).join("_");
-}
-
 export function buildUsername(proxyUserId: string, targeting: Targeting, sessionId?: string): string {
-  return joinUsername(usernameParts(proxyUserId, targeting, sessionId));
+	const parts = usernameParts(proxyUserId, targeting, sessionId);
+  return parts.map((part) => (part.kind === "user" ? part.value : `${part.tag}_${part.value}`)).join("_");
 }

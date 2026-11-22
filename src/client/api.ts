@@ -57,7 +57,7 @@ function query(params: Record<string, string | number | null | undefined>) {
 export const api = {
   countries: (signal?: AbortSignal) =>
     request("/api/locations/countries", countriesResponseSchema, { signal }).then((response) => response.data),
-
+	
   cities: (params: Partial<CitySearchParams>, signal?: AbortSignal) =>
     request(`/api/locations/cities?${query(params)}`, citiesResponseSchema, { signal }),
 
