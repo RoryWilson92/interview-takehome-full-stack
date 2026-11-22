@@ -49,8 +49,8 @@ export function Generator() {
       setResult({ id: Date.now(), lines, request, summary: pendingSummary.current });
       showFlash("success");
     },
-    onError: (error) => {
-      if (error instanceof ApiError) form.applyServerError(error);
+    onError: (error, request) => {
+      if (error instanceof ApiError) form.applyServerError(error, request);
       showFlash("error");
     },
   });

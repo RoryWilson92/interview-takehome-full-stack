@@ -10,6 +10,7 @@ import {
   type ListFormat,
   type RequestField,
   type ResidentialListInput,
+  type ResidentialListRequest,
   type SessionType,
 } from "@/lib/proxy/schema";
 import { TARGETING } from "@/lib/proxy/targeting";
@@ -66,15 +67,25 @@ export function toRequest(values: GeneratorValues): ResidentialListInput {
   };
 }
 
-const TARGETING_KEYS = { country: "country_id", city: "city_alias", asn: "asn_id" } as const;
-const requestFieldOf = (key: keyof GeneratorValues): RequestField =>
-  key in TARGETING_KEYS ? TARGETING_KEYS[key as keyof typeof TARGETING_KEYS] : (key as RequestField);
+/** "London was cleared…" or "London and Virgin Media were cleared…", naming what a country change dropped. */
+function clearedNotice(names: string[], country: Country | null): string | null {
+  if (names.length === 0) return null;
+  const subject = names.join(" and ");
+  // With no country, only the city can be dropped: the ASN does not depend on a country.
+  if (!country) return `${subject} was cleared: a city needs a country.`;
+  return names.length === 1
+    ? `${subject} was cleared: it is not in ${country.country_name}.`
+    : `${subject} were cleared: they are not in ${country.country_name}.`;
+}
+
+/** A server rejection, with the value it rejected so it can hide once that value changes. */
+type ServerError = { field: RequestField; message: string; value: unknown };
 
 export function useGeneratorForm() {
   const [values, setValues] = useState(INITIAL_VALUES);
   const [touched, setTouched] = useState<ReadonlySet<RequestField>>(new Set());
   const [submitted, setSubmitted] = useState(false);
-  const [serverErrors, setServerErrors] = useState<Partial<Record<string, string>>>({});
+  const [serverError, setServerError] = useState<ServerError | null>(null);
   // A one-line note when we change a field on the user's behalf.
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -82,12 +93,13 @@ export function useGeneratorForm() {
   const validation = useMemo(() => residentialListRequestSchema.safeParse(request), [request]);
   const clientErrors = useMemo(() => (validation.success ? {} : messagesByField(validation.error.issues)), [validation]);
 
-  const clearServerErrors = (...fields: RequestField[]) =>
-    setServerErrors((errors) => (fields.some((field) => field in errors) ? {} : errors));
-
-  /** Errors show once a field is touched or the user tried to submit. Server errors always show. */
+  /**
+   * Errors show once a field is touched or the user tried to submit. A server error
+   * shows while the field still holds the value the server rejected. Comparing request
+   * values means form keys (`country`) never need mapping to request fields (`country_id`).
+   */
   function errorFor(field: RequestField): string | undefined {
-    if (serverErrors[field]) return serverErrors[field];
+    if (serverError?.field === field && Object.is(request[field], serverError.value)) return serverError.message;
     const message = clientErrors[field];
     if (!message || !(submitted || touched.has(field))) return undefined;
     return capitalize(`${FIELD_LABELS[field]} ${message}`);
@@ -95,7 +107,6 @@ export function useGeneratorForm() {
 
   function set<K extends keyof GeneratorValues>(key: K, value: GeneratorValues[K]) {
     setValues((current) => ({ ...current, [key]: value }));
-    clearServerErrors(requestFieldOf(key));
     setNotice(null);
   }
 
@@ -105,8 +116,8 @@ export function useGeneratorForm() {
     const keepCity = Boolean(city && country && city.subdivision_id.startsWith(`${country.country_id}-`));
     const keepAsn = Boolean(asn && (!country || asn.country_id === country.country_id));
     setValues((current) => ({ ...current, country, city: keepCity ? city : null, asn: keepAsn ? asn : null }));
-    clearServerErrors("country_id", "city_alias", "asn_id");
-    setNotice(asn && !keepAsn && country ? `${asn.asn_name} was cleared: it is not in ${country.country_name}.` : null);
+    const cleared = [!keepCity && city?.city_name, !keepAsn && asn?.asn_name].filter((name): name is string => Boolean(name));
+    setNotice(clearedNotice(cleared, country));
   }
 
   return {
@@ -128,28 +139,20 @@ export function useGeneratorForm() {
       return validation.success ? validation.data : null;
     },
 
-    /** Puts a server rejection on the field it is about. */
-    applyServerError(error: ApiError) {
-      if (!error.field) return;
+    /** Puts a server rejection on the field it is about, tied to the value that was sent. */
+    applyServerError(error: ApiError, sent: ResidentialListRequest) {
+      if (!error.field || !(error.field in FIELD_LABELS)) return;
+      const field = error.field as RequestField;
       const message =
         error.code === "unknown_location"
-          ? `${FIELD_LABELS[error.field as RequestField] ?? error.field} is not available. Pick another one.`
+          ? `${FIELD_LABELS[field]} is not available. Pick another one.`
           : capitalize(error.message);
-      setServerErrors({ [error.field]: message });
+      setServerError({ field, message, value: sent[field] });
     },
-
-    presetValues: (): PresetValues => ({
-      list_count: values.list_count,
-      list_format: values.list_format,
-      list_session_type: values.list_session_type,
-      country: values.country,
-      city: values.city,
-      asn: values.asn,
-    }),
 
     applyPreset(preset: PresetValues) {
       setValues((current) => ({ ...current, ...preset }));
-      setServerErrors({});
+      setServerError(null);
       setNotice(null);
     },
   };

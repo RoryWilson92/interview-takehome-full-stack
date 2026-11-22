@@ -65,7 +65,19 @@ export function TargetingSection({ form }: { form: GeneratorForm }) {
         )
       }
     >
-      <Field id="country_id" label="Country" error={countryError}>
+      <Field
+        id="country_id"
+        label="Country"
+        error={countryError}
+        hint={
+          form.notice && (
+            <span className="flex items-start gap-1.5 text-amber-700 dark:text-amber-300">
+              <Info className="mt-px size-3.5 shrink-0" aria-hidden />
+              {form.notice}
+            </span>
+          )
+        }
+      >
         <Combobox
           id="country_id"
           label="country"
@@ -121,16 +133,7 @@ export function TargetingSection({ form }: { form: GeneratorForm }) {
         id="asn_id"
         label="ISP / ASN"
         error={asnError}
-        hint={
-          form.notice ? (
-            <span className="flex items-start gap-1.5 text-amber-700 dark:text-amber-300">
-              <Info className="mt-px size-3.5 shrink-0" aria-hidden />
-              {form.notice}
-            </span>
-          ) : (
-            "Search by name or number, like Vodafone or AS5089."
-          )
-        }
+        hint="Search by name or number, like Vodafone or AS5089."
       >
         <Combobox
           id="asn_id"
