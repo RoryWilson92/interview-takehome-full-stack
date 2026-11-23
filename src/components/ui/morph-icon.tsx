@@ -48,7 +48,7 @@ export function MorphIcon({ glyph, size = 16, spin = false, className }: MorphIc
 
     const morph = morpher(from, glyph);
     const controls = animate(0, 1, {
-      duration: 0.38,
+      duration: 0.62,
       ease: [0.32, 0.72, 0, 1],
       onUpdate: (t) => d.set(morph(t)),
       onComplete: () => d.set(glyph.join(" ")), // end on the crisp original path

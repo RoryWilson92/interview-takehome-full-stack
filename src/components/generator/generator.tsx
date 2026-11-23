@@ -2,7 +2,7 @@
 
 import { useMutation } from "@tanstack/react-query";
 import { useAnimate } from "motion/react";
-import { useRef, useState, useSyncExternalStore, type FormEvent, type KeyboardEvent } from "react";
+import { useRef, useState, useSyncExternalStore, type KeyboardEvent, type SyntheticEvent } from "react";
 import { api } from "@/client/api";
 import { describeError } from "@/client/describe-error";
 import { glyphs } from "@/components/ui/glyphs";
@@ -55,7 +55,7 @@ export function Generator() {
     },
   });
 
-  function submit(event?: FormEvent) {
+  function submit(event?: SyntheticEvent) {
     event?.preventDefault();
     if (generate.isPending) return;
     const request = form.submit();
